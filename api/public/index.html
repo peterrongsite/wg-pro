@@ -312,7 +312,8 @@
     </div>
 
     <script>
-        const API_URL = 'http://localhost:3000';
+        const API_URL = window.location.origin;
+        const WS_URL = `ws://${window.location.hostname}:${window.location.port}`;
         let authToken = localStorage.getItem('authToken');
         let ws = null;
         let connectionStatus = {};
@@ -373,7 +374,7 @@
         }
 
         function initWebSocket() {
-            ws = new WebSocket(`ws://localhost:3000`);
+            ws = new WebSocket(WS_URL);
             
             ws.onmessage = (event) => {
                 const message = JSON.parse(event.data);
