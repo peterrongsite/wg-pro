@@ -1,0 +1,35 @@
+services:
+  wireguard:
+    image: linuxserver/wireguard
+    container_name: wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./config:/config
+      - /lib/modules:/lib/modules
+    ports:
+      - 51820:51820/udp
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    container_name: wireguard-api
+    environment:
+      - LOGIN_PASSWORD=${LOGIN_PASSWORD:-admin123}
+      - SERVER_PUBLIC_KEY=${SERVER_PUBLIC_KEY:-INmRQAZI6vPcKW3FolLYSb0xOaPCb7TufQp6BdyuizY=}
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-this-in-production}
+    volumes:
+      - ./config:/wireguard-config
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 3000:3000
+    depends_on:
+      - wireguard
+    restart: unless-stopped
