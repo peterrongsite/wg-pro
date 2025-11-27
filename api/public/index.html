@@ -321,11 +321,21 @@
         let currentPage = 1;
         const itemsPerPage = 10;
 
+        // Debug logging
+        console.log('🌐 API Configuration:');
+        console.log('   API_URL:', API_URL);
+        console.log('   WS_URL:', WS_URL);
+        console.log('   Current location:', window.location.href);
+        console.log('   Hostname:', window.location.hostname);
+        console.log('   Port:', window.location.port);
+
         if (authToken) showDashboard();
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const password = document.getElementById('password').value;
+            
+            console.log('🔐 Login attempt to:', `${API_URL}/auth/login`);
             
             try {
                 const response = await fetch(`${API_URL}/auth/login`, {
