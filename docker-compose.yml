@@ -18,15 +18,15 @@ services:
   api:
     build: ./api
     container_name: wireguard-api
-    network_mode: host
     environment:
       - LOGIN_PASSWORD=${LOGIN_PASSWORD:-admin123}
       - SERVER_PUBLIC_KEY=${SERVER_PUBLIC_KEY:-INmRQAZI6vPcKW3FolLYSb0xOaPCb7TufQp6BdyuizY=}
       - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-this-in-production}
-      - PORT=3755
     volumes:
       - ./config:/wireguard-config
       - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 3755:3000
     depends_on:
       - wireguard
     restart: unless-stopped
