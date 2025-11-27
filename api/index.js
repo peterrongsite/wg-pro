@@ -336,4 +336,5 @@ wss.on('connection', (ws) => {
   });
 });
 
-server.listen(3000, () => console.log('API running on port 3000 with WebSocket support'));
+const PORT = process.env.PORT || 3755;
+server.listen(PORT, () => console.log('API running on port ${PORT} with WebSocket support'));
