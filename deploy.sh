@@ -97,11 +97,11 @@ fi
 echo "🔥 Configuring firewall..."
 if command -v ufw &> /dev/null; then
     ufw allow 51820/udp
-    ufw allow 3000/tcp
+    ufw allow 3755/tcp
     ufw --force enable
 elif command -v firewall-cmd &> /dev/null; then
     firewall-cmd --permanent --add-port=51820/udp
-    firewall-cmd --permanent --add-port=3000/tcp
+    firewall-cmd --permanent --add-port=3755/tcp
     firewall-cmd --reload
 fi
 
@@ -110,7 +110,7 @@ echo "✅ Deployment Complete!"
 echo "======================="
 echo ""
 echo "🌐 Access your WireGuard Management UI:"
-echo "   http://$PUBLIC_IP:3000"
+echo "   http://$PUBLIC_IP:3755"
 echo ""
 echo "📋 WireGuard Server:"
 echo "   Endpoint: $PUBLIC_IP:51820"
