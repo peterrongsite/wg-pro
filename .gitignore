@@ -1,0 +1,18 @@
+# Ignore environment variables
+.env
+
+# Ignore WireGuard config
+config/
+
+# Ignore client configs
+*.conf
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Docker
+.dockerignore
