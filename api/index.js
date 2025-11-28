@@ -301,21 +301,26 @@ app.get('/status', authenticateToken, async (req, res) => {
     const lines = stdout.trim().split('\n');
     const connectedPeers = {};
     
+    const now = Math.floor(Date.now() / 1000);
+    
     // Parse wg show output
     lines.slice(1).forEach(line => {
       const parts = line.split('\t');
       if (parts.length >= 5) {
         const publicKey = parts[0];
-        const lastHandshake = parseInt(parts[4]);
+        const lastHandshakeTimestamp = parseInt(parts[4]);
         const transferRx = parseInt(parts[5]);
         const transferTx = parseInt(parts[6]);
         
-        // Consider connected if handshake within last 3 minutes
-        const isConnected = lastHandshake > 0 && lastHandshake < 180;
+        // Calculate handshake age
+        const handshakeAge = now - lastHandshakeTimestamp;
+        
+        // Consider connected if handshake within last 3 minutes (180 seconds)
+        const isConnected = lastHandshakeTimestamp > 0 && handshakeAge < 180;
         
         connectedPeers[publicKey] = {
           connected: isConnected,
-          lastHandshake,
+          lastHandshake: handshakeAge,
           transferRx,
           transferTx
         };
@@ -335,42 +340,50 @@ const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
   console.log('WebSocket client connected');
   
-  // Send status updates every 5 seconds
-  const interval = setInterval(async () => {
-    try {
-      const { stdout } = await execPromise('docker exec wireguard wg show wg0 dump');
-      const lines = stdout.trim().split('\n');
-      const connectedPeers = {};
-      
-      lines.slice(1).forEach(line => {
-        const parts = line.split('\t');
-        if (parts.length >= 5) {
-          const publicKey = parts[0];
-          const lastHandshake = parseInt(parts[4]);
-          const transferRx = parseInt(parts[5]);
-          const transferTx = parseInt(parts[6]);
-          
-          const isConnected = lastHandshake > 0 && lastHandshake < 180;
-          
-          connectedPeers[publicKey] = {
-            connected: isConnected,
-            lastHandshake,
-            transferRx,
-            transferTx
-          };
-        }
-      });
-      
-      ws.send(JSON.stringify({ type: 'status', data: connectedPeers }));
-    } catch (error) {
-      // Silently fail
-    }
-  }, 5000);
+  // Send initial status immediately
+  sendStatus(ws);
+  
+  // Send status updates every 2 seconds
+  const interval = setInterval(() => sendStatus(ws), 2000);
   
   ws.on('close', () => {
     console.log('WebSocket client disconnected');
     clearInterval(interval);
   });
 });
+
+async function sendStatus(ws) {
+  try {
+    const { stdout } = await execPromise('docker exec wireguard wg show wg0 dump');
+    const lines = stdout.trim().split('\n');
+    const connectedPeers = {};
+    
+    lines.slice(1).forEach(line => {
+      const parts = line.split('\t');
+      if (parts.length >= 5) {
+        const publicKey = parts[0];
+        const lastHandshake = parseInt(parts[4]);
+        const transferRx = parseInt(parts[5]);
+        const transferTx = parseInt(parts[6]);
+        
+        // Consider connected if handshake within last 3 minutes (180 seconds)
+        const now = Math.floor(Date.now() / 1000);
+        const handshakeAge = now - lastHandshake;
+        const isConnected = lastHandshake > 0 && handshakeAge < 180;
+        
+        connectedPeers[publicKey] = {
+          connected: isConnected,
+          lastHandshake: handshakeAge,
+          transferRx,
+          transferTx
+        };
+      }
+    });
+    
+    ws.send(JSON.stringify({ type: 'status', data: connectedPeers }));
+  } catch (error) {
+    // Silently fail
+  }
+}
 
 server.listen(3000, () => console.log('API running on port 3000 with WebSocket support'));
