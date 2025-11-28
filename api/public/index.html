@@ -759,6 +759,8 @@ ${status ? `
         }
 
         function updateCharts() {
+            // Check if charts are initialized
+            if (!transferChart || !connectionChart || !bandwidthChart) return;
             if (!connectionStatus || Object.keys(connectionStatus).length === 0) return;
 
             let totalRx = 0;
