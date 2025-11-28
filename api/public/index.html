@@ -526,13 +526,22 @@
         });
 
         async function showClientDetails(id) {
-            const client = allClients.find(c => c.id === id);
-            if (!client) return;
-            
-            const status = connectionStatus[client.publicKey];
-            const isConnected = status ? status.connected : false;
-            
-            const details = `
+            // Fetch full client details including private key
+            try {
+                const response = await fetch(`${API_URL}/clients/${id}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) {
+                    alert('Error loading client details');
+                    return;
+                }
+                
+                const client = await response.json();
+                const status = connectionStatus[client.publicKey];
+                const isConnected = status ? status.connected : false;
+                
+                const details = `
 <h3>Client Information</h3>
 <p><strong>Status:</strong> <span class="status-badge ${isConnected ? 'status-online' : 'status-offline'}">${isConnected ? '● Online' : '○ Offline'}</span></p>
 <p><strong>IP Address:</strong> ${client.ip}</p>
@@ -541,10 +550,13 @@
 <h3>Public Key</h3>
 <div class="key-display">${client.publicKey}</div>
 
+${client.privateKey ? `<h3>Private Key</h3>
+<div class="key-display">${client.privateKey}</div>` : '<p><em>Private key not available (client created before private key storage was implemented)</em></p>'}
+
 <h3>Client Configuration</h3>
 <p>Use this configuration on the client device:</p>
 <div class="config-output" id="configOutput">[Interface]
-Address = ${client.ip.split('/')[0]}/32
+${client.privateKey ? `PrivateKey = ${client.privateKey}\n` : ''}Address = ${client.ip.split('/')[0]}/32
 DNS = 1.1.1.1
 
 [Peer]
@@ -558,11 +570,14 @@ ${status ? `
 <p><strong>Data Received:</strong> ${formatBytes(status.transferRx)}</p>
 <p><strong>Data Sent:</strong> ${formatBytes(status.transferTx)}</p>
 ` : ''}
-            `;
-            
-            document.getElementById('modalTitle').textContent = `Client ${id} Details`;
-            document.getElementById('modalBody').innerHTML = details;
-            document.getElementById('configModal').classList.add('active');
+                `;
+                
+                document.getElementById('modalTitle').textContent = `Client ${id} Details`;
+                document.getElementById('modalBody').innerHTML = details;
+                document.getElementById('configModal').classList.add('active');
+            } catch (error) {
+                alert('Error loading client details: ' + error.message);
+            }
         }
 
         function formatBytes(bytes) {

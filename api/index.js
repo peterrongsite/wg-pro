@@ -13,6 +13,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const CONFIG_PATH = '/wireguard-config/wg_confs/wg0.conf';
+const PRIVATE_KEYS_PATH = '/wireguard-config/private_keys.json';
 const SERVER_PUBLIC_KEY = process.env.SERVER_PUBLIC_KEY || 'INmRQAZI6vPcKW3FolLYSb0xOaPCb7TufQp6BdyuizY=';
 const LOGIN_PASSWORD = process.env.LOGIN_PASSWORD || 'admin123';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
@@ -104,6 +105,32 @@ function isIPInUse(peers, ip) {
   return peers.some(peer => peer.ip === ip);
 }
 
+// Helper: Load private keys from storage
+function loadPrivateKeys() {
+  try {
+    if (fs.existsSync(PRIVATE_KEYS_PATH)) {
+      const data = fs.readFileSync(PRIVATE_KEYS_PATH, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Error loading private keys:', error);
+  }
+  return {};
+}
+
+// Helper: Save private keys to storage
+function savePrivateKey(publicKey, privateKey) {
+  const keys = loadPrivateKeys();
+  keys[publicKey] = privateKey;
+  fs.writeFileSync(PRIVATE_KEYS_PATH, JSON.stringify(keys, null, 2));
+}
+
+// Helper: Get private key for a public key
+function getPrivateKey(publicKey) {
+  const keys = loadPrivateKeys();
+  return keys[publicKey] || null;
+}
+
 // GET /clients - List all clients
 app.get('/clients', authenticateToken, (req, res) => {
   fs.readFile(CONFIG_PATH, 'utf8', (err, data) => {
@@ -126,6 +153,13 @@ app.get('/clients/:id', authenticateToken, (req, res) => {
     const client = peers.find(p => p.id === parseInt(req.params.id));
     
     if (!client) return res.status(404).json({ error: 'Client not found' });
+    
+    // Add private key if available
+    const privateKey = getPrivateKey(client.publicKey);
+    if (privateKey) {
+      client.privateKey = privateKey;
+    }
+    
     res.json(client);
   });
 });
@@ -164,6 +198,9 @@ app.post('/clients', authenticateToken, async (req, res) => {
     
     const clientPrivateKey = privateKey.trim();
     const clientPublicKey = publicKey.trim();
+    
+    // Save private key for later retrieval
+    savePrivateKey(clientPublicKey, clientPrivateKey);
     
     // Add peer to server config
     const peerConfig = `\n# ${name || `Client ${peers.length + 1}`}\n[Peer]\nPublicKey = ${clientPublicKey}\nAllowedIPs = ${clientIP}/32\n`;
