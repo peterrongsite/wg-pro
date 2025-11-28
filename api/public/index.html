@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WireGuard Management</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -202,9 +203,30 @@
             font-size: 13px;
         }
         
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .chart-container h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+            font-size: 16px;
+        }
+        
         @media (max-width: 768px) {
             .form-row { grid-template-columns: 1fr; }
             .header { flex-direction: column; gap: 15px; }
+            .stats-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -230,6 +252,7 @@
 
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('clients')">Clients</button>
+                <button class="tab" onclick="switchTab('stats')">Statistics</button>
                 <button class="tab" onclick="switchTab('docs')">API Docs</button>
             </div>
 
@@ -282,6 +305,23 @@
                         </tbody>
                     </table>
                     <div class="pagination" id="pagination"></div>
+                </div>
+            </div>
+
+            <div id="statsTab" class="tab-content">
+                <div class="stats-grid">
+                    <div class="chart-container">
+                        <h3>Data Transfer Overview</h3>
+                        <canvas id="transferChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Connection History (Last 60s)</h3>
+                        <canvas id="connectionChart"></canvas>
+                    </div>
+                </div>
+                <div style="margin-top: 30px;">
+                    <h3>Client Bandwidth Usage</h3>
+                    <canvas id="bandwidthChart" style="max-height: 400px;"></canvas>
                 </div>
             </div>
 
@@ -363,6 +403,7 @@
             document.getElementById('dashboard').style.display = 'block';
             loadClients();
             initWebSocket();
+            initCharts();
         }
 
         function logout() {
@@ -391,6 +432,7 @@
                 if (message.type === 'status') {
                     connectionStatus = message.data;
                     updateConnectionStatus();
+                    updateCharts();
                 }
             };
             
@@ -625,6 +667,141 @@ ${status ? `
             navigator.clipboard.writeText(config).then(() => {
                 alert('Configuration copied to clipboard!');
             });
+        }
+
+        // Chart.js setup
+        let transferChart, connectionChart, bandwidthChart;
+        let connectionHistory = [];
+        const maxHistoryPoints = 30;
+
+        function initCharts() {
+            // Transfer Chart
+            const transferCtx = document.getElementById('transferChart').getContext('2d');
+            transferChart = new Chart(transferCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Downloaded', 'Uploaded'],
+                    datasets: [{
+                        data: [0, 0],
+                        backgroundColor: ['#667eea', '#764ba2']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+
+            // Connection History Chart
+            const connectionCtx = document.getElementById('connectionChart').getContext('2d');
+            connectionChart = new Chart(connectionCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Connected Clients',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+
+            // Bandwidth Chart
+            const bandwidthCtx = document.getElementById('bandwidthChart').getContext('2d');
+            bandwidthChart = new Chart(bandwidthCtx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Download',
+                            data: [],
+                            backgroundColor: '#667eea'
+                        },
+                        {
+                            label: 'Upload',
+                            data: [],
+                            backgroundColor: '#764ba2'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatBytes(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateCharts() {
+            if (!connectionStatus || Object.keys(connectionStatus).length === 0) return;
+
+            let totalRx = 0;
+            let totalTx = 0;
+            let connectedCount = 0;
+            const clientLabels = [];
+            const rxData = [];
+            const txData = [];
+
+            allClients.forEach(client => {
+                const status = connectionStatus[client.publicKey];
+                if (status) {
+                    totalRx += status.transferRx;
+                    totalTx += status.transferTx;
+                    if (status.connected) connectedCount++;
+                    
+                    clientLabels.push(client.ip);
+                    rxData.push(status.transferRx);
+                    txData.push(status.transferTx);
+                }
+            });
+
+            // Update transfer chart
+            transferChart.data.datasets[0].data = [totalRx, totalTx];
+            transferChart.update('none');
+
+            // Update connection history
+            const now = new Date();
+            const timeLabel = now.toLocaleTimeString();
+            connectionHistory.push({ time: timeLabel, count: connectedCount });
+            if (connectionHistory.length > maxHistoryPoints) {
+                connectionHistory.shift();
+            }
+            
+            connectionChart.data.labels = connectionHistory.map(h => h.time);
+            connectionChart.data.datasets[0].data = connectionHistory.map(h => h.count);
+            connectionChart.update('none');
+
+            // Update bandwidth chart
+            bandwidthChart.data.labels = clientLabels;
+            bandwidthChart.data.datasets[0].data = rxData;
+            bandwidthChart.data.datasets[1].data = txData;
+            bandwidthChart.update('none');
         }
     </script>
 </body>
